@@ -234,6 +234,9 @@
     <Reference Include="Oxide.Unity">
       <HintPath>References\Oxide\Oxide.Unity.dll</HintPath>
     </Reference>
+    <Reference Include="Rust.Global">
+      <HintPath>References\Rust\Rust.Global.dll</HintPath>
+    </Reference>
     <Reference Include="Rust.Localization">
       <HintPath>References\Rust\Rust.Localization.dll</HintPath>
     </Reference>
@@ -245,12 +248,18 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
+    <Reference Include="UnityEngine">
+      <HintPath>References\Rust\UnityEngine.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>References\Rust\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>References\Rust\UnityEngine.PhysicsModule.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CreativeCupboards.cs" />
+    <Compile Include="BuildTools.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
