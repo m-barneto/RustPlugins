@@ -137,14 +137,13 @@ namespace Oxide.Plugins {
         void OnEntitySpawned(BuildingPrivlidge cupboard) {
             var player = BasePlayer.FindByID(cupboard.OwnerID);
             if (!permission.UserHasPermission(player.UserIDString, USE_CREATIVE_CUPBOARD)) return;
-            // Authed user placed cupboard, add it to iterated list
-            cupboards.Add(cupboard);
-            timer.Once(2f, () => {
-                cupboard.cachedProtectedMinutes = 50000f;
-                cupboard.nextProtectedCalcTime = Time.realtimeSinceStartup + 50000f;
-                cupboard.SendNetworkUpdateImmediate();
-            });
-
+            // Authed user placed cupboard set it up
+            cupboard.inventory.Clear();
+            cupboard.inventory.AddItem(ItemManager.FindItemDefinition("wood"), 999999, 0, ItemContainer.LimitStack.None);
+            cupboard.inventory.AddItem(ItemManager.FindItemDefinition("stones"), 999999, 0, ItemContainer.LimitStack.None);
+            cupboard.inventory.AddItem(ItemManager.FindItemDefinition("metal.fragments"), 999999, 0, ItemContainer.LimitStack.None);
+            cupboard.inventory.AddItem(ItemManager.FindItemDefinition("metal.refined"), 999999, 0, ItemContainer.LimitStack.None);
+            cupboard.inventory.SetLocked(true);
         }
 
         // Setup player selection data
