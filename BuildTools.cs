@@ -204,6 +204,22 @@ namespace Oxide.Plugins {
         object OnPayForPlacement(BasePlayer player, Planner planner, Construction construction) {
             return false;
         }
+        
+        // Test below hooks!
+        bool CanAffordToPlace(BasePlayer player, Planner planner, Construction construction) {
+            return true;
+        }
+
+        void OnItemDeployed(Deployer deployer, BaseEntity entity, BaseEntity slotEntity) {
+            Puts("OnItemDeployed works!");
+        }
+
+
+        bool CanDemolish(BasePlayer player, BuildingBlock block, BuildingGrade.Enum grade) {
+            Puts("CanDemolish works!");
+            return true;
+        }
+
         #endregion
 
         #region Methods
@@ -348,7 +364,10 @@ namespace Oxide.Plugins {
                 if (!selectedSkins[selectedGrade].name.Equals("Container")) return 0;
                 return selectedColor;
             }
-            #endregion
         }
+        #endregion
+        #region Data
+
+        #endregion
     }
 }
