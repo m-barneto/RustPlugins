@@ -20,13 +20,9 @@ namespace Oxide.Plugins {
         public const string USE_BGRADE = "buildtools.bgrade";
         public const string USE_SKINNED_GRADES = "buildtools.bgrade_skinned";
 
-        public const float REPLENISH_CUPBOARD_INTERVAL = 60f;
-
-        public List<BuildingPrivlidge> cupboards = new List<BuildingPrivlidge>();
-
         public Dictionary<ulong, PlayerSelectionData> playerSelections = new Dictionary<ulong, PlayerSelectionData>();
 
-        Coroutine replenish;
+        DataFileSystem playerDataFileSystem;
 
         #region Hooks
         void Loaded() {
@@ -39,22 +35,17 @@ namespace Oxide.Plugins {
             permission.RegisterPermission(USE_BGRADE, this);
             permission.RegisterPermission(USE_SKINNED_GRADES, this);
 
+            // Setup our data file system
+            playerDataFileSystem = new DataFileSystem($"{Interface.Oxide.DataDirectory}\\{Name}");
+
             // Go through active players and setup player data
             for (int i = 0; i < BasePlayer.activePlayerList.Count; i++) {
                 OnPlayerConnected(BasePlayer.activePlayerList[i]);
             }
-
-            // Go through all cupboards on server
-            // Replace with tracked cupboards later
-            cupboards = BaseNetworkable.serverEntities.OfType<BuildingPrivlidge>().Where((b) => {
-                return permission.UserHasPermission(b.OwnerID.ToString(), USE_CREATIVE_CUPBOARD);
-            }).ToList();
-
-            replenish = ServerMgr.Instance.StartCoroutine(ReplenishCupboards());
         }
 
         void Unload() {
-            ServerMgr.Instance.StopCoroutine(replenish);
+
         }
 
         void OnPlayerInput(BasePlayer player, InputState input) {
@@ -155,13 +146,17 @@ namespace Oxide.Plugins {
 
             playerSelections.Add(player.userID, new PlayerSelectionData());
         }
-        // Unload player selection data
+        // Unload and Save player selection data
         void OnPlayerDisconnected(BasePlayer player, string reason) {
             if (!playerSelections.ContainsKey(player.userID)) {
                 Puts($"Error! Player {player.UserIDString} : {player.displayName} does not exist within playerSelections loaded data!");
                 return;
             }
             playerSelections.Remove(player.userID);
+        }
+        // Save player data for all connected players
+        void OnServerSave() {
+
         }
 
         // When player places structure handle auto bgrade and skin
@@ -204,7 +199,7 @@ namespace Oxide.Plugins {
         object OnPayForPlacement(BasePlayer player, Planner planner, Construction construction) {
             return false;
         }
-        
+
         // Test below hooks!
         bool CanAffordToPlace(BasePlayer player, Planner planner, Construction construction) {
             return true;
@@ -367,7 +362,20 @@ namespace Oxide.Plugins {
         }
         #endregion
         #region Data
+        void SavePlayerData(BasePlayer player) {
+            // Make sure the player data is different from the default
 
+            // Save data to our filesystem
+            playerDataFileSystem.WriteObject($"{player.UserIDString}", playerData);
+        }
+        void LoadPlayerData(BasePlayer player) {
+            // If the player doesn't have a file, create a new PlayerData instance for them
+            if (!playerDataFileSystem.ExistsDatafile(player.UserIDString)) {
+                return new PlayerData();
+            }
+            // Otherwise, return the loaded file
+            return playerDataFileSystem.ReadObject<PlayerData>($"{player.UserIDString}");
+        }
         #endregion
     }
 }
