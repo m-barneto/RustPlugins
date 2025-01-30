@@ -70,7 +70,7 @@ namespace Oxide.Plugins {
 
                     hitEnt.Kill();
                 }
-                if (input.WasJustPressed(BUTTON.FIRE_PRIMARY)) {
+                if (input.IsDown(BUTTON.FIRE_SECONDARY)) {
                     // Have perm
                     if (!permission.UserHasPermission(player.UserIDString, USE_BGRADE)) return;
 
@@ -80,6 +80,7 @@ namespace Oxide.Plugins {
                     // Send out raycast and kill entity
                     RaycastHit hit;
                     if (!Physics.Raycast(player.eyes.HeadRay(), out hit, 25f)) return;
+                    if (hit.distance <= 2f + float.Epsilon) return;
 
                     BuildingBlock bb = hit.GetEntity() as BuildingBlock;
 
@@ -195,43 +196,15 @@ namespace Oxide.Plugins {
             });
             return false;
         }
+
         // Place for free
         object OnPayForPlacement(BasePlayer player, Planner planner, Construction construction) {
             return false;
         }
 
-        // Test below hooks!
-        bool CanAffordToPlace(BasePlayer player, Planner planner, Construction construction) {
-            return true;
-        }
-
-        void OnItemDeployed(Deployer deployer, BaseEntity entity, BaseEntity slotEntity) {
-            Puts("OnItemDeployed works!");
-        }
-
-
-        bool CanDemolish(BasePlayer player, BuildingBlock block, BuildingGrade.Enum grade) {
-            Puts("CanDemolish works!");
-            return true;
-        }
-
         #endregion
 
         #region Methods
-        IEnumerator ReplenishCupboards() {
-            while (true) {
-                // Loop through all authed cupboards
-                for (int i = 0; i < cupboards.Count; i++) {
-                    var cb = cupboards[i];
-                    cb.cachedProtectedMinutes = 50000f;
-                    cb.nextProtectedCalcTime = Time.realtimeSinceStartup + 50000f;
-                    cb.SendNetworkUpdateImmediate();
-                    yield return CoroutineEx.waitForSeconds(REPLENISH_CUPBOARD_INTERVAL / cupboards.Count);
-                }
-                if (cupboards.Count == 0) yield return CoroutineEx.waitForSeconds(30f);
-            }
-        }
-
         private static ConsoleSystem.Arg RunSilentCommand(string strCommand, params object[] args) {
             var command = ConsoleSystem.BuildCommand(strCommand, args);
             var arg = new ConsoleSystem.Arg(ConsoleSystem.Option.Unrestricted, command);
@@ -364,17 +337,18 @@ namespace Oxide.Plugins {
         #region Data
         void SavePlayerData(BasePlayer player) {
             // Make sure the player data is different from the default
-
+            PlayerSelectionData playerData;
+            if (!playerSelections.TryGetValue(player.userID, out playerData)) return;
             // Save data to our filesystem
             playerDataFileSystem.WriteObject($"{player.UserIDString}", playerData);
         }
-        void LoadPlayerData(BasePlayer player) {
+        PlayerSelectionData LoadPlayerData(BasePlayer player) {
             // If the player doesn't have a file, create a new PlayerData instance for them
             if (!playerDataFileSystem.ExistsDatafile(player.UserIDString)) {
-                return new PlayerData();
+                return new PlayerSelectionData();
             }
             // Otherwise, return the loaded file
-            return playerDataFileSystem.ReadObject<PlayerData>($"{player.UserIDString}");
+            return playerDataFileSystem.ReadObject<PlayerSelectionData>($"{player.UserIDString}");
         }
         #endregion
     }
