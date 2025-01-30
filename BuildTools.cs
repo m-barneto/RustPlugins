@@ -1,6 +1,7 @@
 ﻿#pragma warning disable IDE0051 // Remove unused private members
 
 using Facepunch;
+using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using System.Collections;
@@ -18,7 +19,6 @@ namespace Oxide.Plugins {
         public const string USE_REMOVE_HAMMER = "buildtools.hammerremove";
 
         public const string USE_BGRADE = "buildtools.bgrade";
-        public const string USE_SKINNED_GRADES = "buildtools.bgrade_skinned";
 
         public Dictionary<ulong, PlayerSelectionData> playerSelections = new Dictionary<ulong, PlayerSelectionData>();
 
@@ -33,7 +33,6 @@ namespace Oxide.Plugins {
             permission.RegisterPermission(USE_REMOVE_HAMMER, this);
 
             permission.RegisterPermission(USE_BGRADE, this);
-            permission.RegisterPermission(USE_SKINNED_GRADES, this);
 
             // Setup our data file system
             playerDataFileSystem = new DataFileSystem($"{Interface.Oxide.DataDirectory}\\{Name}");
@@ -44,9 +43,9 @@ namespace Oxide.Plugins {
             }
         }
 
-        void Unload() {
-
-        }
+        // Save player data for all connected players
+        void Unload() => SaveData();
+        void OnServerSave() => SaveData();
 
         void OnPlayerInput(BasePlayer player, InputState input) {
             var helditemName = player.GetActiveItem()?.info?.shortname;
@@ -145,7 +144,13 @@ namespace Oxide.Plugins {
                 return;
             }
 
-            playerSelections.Add(player.userID, new PlayerSelectionData());
+            PlayerSelectionData data = LoadPlayerData(player);
+            if (data == null) {
+                Puts($"Error loading data for player {player.UserIDString} : {player.displayName}");
+                return;
+            }
+
+            playerSelections.Add(player.userID, data);
         }
         // Unload and Save player selection data
         void OnPlayerDisconnected(BasePlayer player, string reason) {
@@ -153,12 +158,12 @@ namespace Oxide.Plugins {
                 Puts($"Error! Player {player.UserIDString} : {player.displayName} does not exist within playerSelections loaded data!");
                 return;
             }
+
+            SavePlayerData(player);
+
             playerSelections.Remove(player.userID);
         }
-        // Save player data for all connected players
-        void OnServerSave() {
 
-        }
 
         // When player places structure handle auto bgrade and skin
         private void OnEntityBuilt(Planner plan, GameObject gameObject) {
@@ -237,6 +242,13 @@ namespace Oxide.Plugins {
             bb.GetBuilding()?.Dirty();
         }
 
+        void SaveData() {
+            // Go through active players and save player data
+            for (int i = 0; i < BasePlayer.activePlayerList.Count; i++) {
+                OnPlayerDisconnected(BasePlayer.activePlayerList[i], "");
+            }
+        }
+
         #endregion
 
         #region BGradeSkins
@@ -274,10 +286,17 @@ namespace Oxide.Plugins {
         #endregion
 
         #region Player Selections
+        [JsonObject(MemberSerialization.OptIn)]
         public class PlayerSelectionData {
+            [JsonProperty]
             BuildingGrade.Enum selectedGrade = BuildingGrade.Enum.Twigs;
+            [JsonProperty]
             Dictionary<BuildingGrade.Enum, BuildingSkin> selectedSkins;
+            [JsonProperty]
             uint selectedColor = 1;
+
+            public bool changed = false;
+
             public PlayerSelectionData() {
                 selectedSkins = new Dictionary<BuildingGrade.Enum, BuildingSkin>() {
                     { BuildingGrade.Enum.Twigs, BGradeSkins[BuildingGrade.Enum.Twigs][0] },
@@ -289,9 +308,11 @@ namespace Oxide.Plugins {
             }
             public void SetGrade(BuildingGrade.Enum grade) {
                 selectedGrade = grade;
+                changed = true;
             }
             public void SetGrade(int grade) {
                 selectedGrade = (BuildingGrade.Enum)grade;
+                changed = true;
             }
             public void IncrementGrade() {
                 int g = (int)selectedGrade + 1;
@@ -312,6 +333,7 @@ namespace Oxide.Plugins {
                     return false;
                 }
                 selectedSkins[grade] = buildingSkin;
+                changed = true;
                 return true;
             }
             public BuildingSkin GetSkin(BuildingGrade.Enum grade) {
@@ -323,6 +345,7 @@ namespace Oxide.Plugins {
             public bool SetColor(uint color) {
                 if (color <= 0 || color > 16) return false;
                 selectedColor = color;
+                changed = true;
                 return true;
             }
             public uint GetColor() {
@@ -339,6 +362,8 @@ namespace Oxide.Plugins {
             // Make sure the player data is different from the default
             PlayerSelectionData playerData;
             if (!playerSelections.TryGetValue(player.userID, out playerData)) return;
+
+            if (!playerData.changed) return;
             // Save data to our filesystem
             playerDataFileSystem.WriteObject($"{player.UserIDString}", playerData);
         }
@@ -348,7 +373,9 @@ namespace Oxide.Plugins {
                 return new PlayerSelectionData();
             }
             // Otherwise, return the loaded file
-            return playerDataFileSystem.ReadObject<PlayerSelectionData>($"{player.UserIDString}");
+            PlayerSelectionData data = playerDataFileSystem.ReadObject<PlayerSelectionData>($"{player.UserIDString}");
+            Puts($"Loaded file for player {player.displayName} and changed was {data.changed}");
+            return data;
         }
         #endregion
     }
