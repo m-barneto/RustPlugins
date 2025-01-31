@@ -323,12 +323,12 @@ namespace Oxide.Plugins {
             }
             public void IncrementGrade() {
                 int g = (int)selectedGrade + 1;
-                if (g >= (int)BuildingGrade.Enum.Count) g = 0;
+                if (g >= (int)BuildingGrade.Enum.Count) g = (int)BuildingGrade.Enum.TopTier;
                 SetGrade(g);
             }
             public void DecrementGrade() {
                 int g = (int)selectedGrade - 1;
-                if (g <= 0) g = (int)BuildingGrade.Enum.TopTier;
+                if (g <= 0) g = (int)BuildingGrade.Enum.Twigs;
                 SetGrade(g);
             }
             public BuildingGrade.Enum GetGrade() {
