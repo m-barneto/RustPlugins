@@ -46,6 +46,13 @@ namespace Oxide.Plugins
         StringBuilder helpYou = new StringBuilder();
         private List<int> numberMax = new List<int>();
 
+        // Wipe cooldown time data
+        private static DateTime Epoch = new DateTime(1970, 1, 1, 0, 0, 0);
+
+        private static double LastWipeTime;
+
+        private static double CurrentTime => DateTime.UtcNow.Subtract(Epoch).TotalSeconds;
+
         void Loaded()
         {
             // Load configs
@@ -70,6 +77,10 @@ namespace Oxide.Plugins
             // Build StringBuilders
             voteList();
         }
+
+        void OnServerInitialized() {
+            LastWipeTime = SaveRestore.SaveCreatedTime.Subtract(Epoch).TotalSeconds;
+        }
         #endregion
 
         #region Localization
@@ -84,6 +95,7 @@ namespace Oxide.Plugins
                 ["ClaimError"] = "Something went wrong! Player <color=#ff0000>{0} got an error</color> from <color=#fffb00>{1}</color>. Please try again later!",
                 ["ClaimReward"] = "You just received your vote reward(s). Enjoy!",
                 ["ClaimPleaseWait"] = "Checking the voting websites. Please wait...",
+                ["ClaimWipeCooldown"] = "Rewards not available for another {0} into wipe.",
                 ["VoteList"] = "You have voted <color=#fffb00>{1}</color> time(s)!\n Leave another vote on these websites:\n{0}",
                 ["EarnReward"] = "When you have voted, type <color=#fffb00>/claim</color> to claim your reward(s)!",
                 ["RewardListFirstTime"] = "<color=#00fff7>Reward for voting for the first time.</color>",
@@ -214,6 +226,19 @@ namespace Oxide.Plugins
                 claimCooldown.Add(player.userID, new StringBuilder());
             else if (claimCooldown.ContainsKey(player.userID))
                 return;
+
+            // Check if it's been less than cooldown since wipe.
+            int claimWipeCooldown;
+            if (!int.TryParse(_config.Settings[PluginSettings.RewardClaimWipeCooldown], out claimWipeCooldown)) {
+                PrintWarning($"[RewardHandler] Invalid value for RewardClaimWipeCooldown \"{_config.Settings[PluginSettings.RewardClaimWipeCooldown]}\"");
+                return;
+            }
+            int remainingSeconds;
+            if (IsOnWipeCooldown(claimWipeCooldown, out remainingSeconds)) {
+                Chat(player, _lang("ClaimWipeCooldown", player.UserIDString, FormatTimeSpanVerbose(TimeSpan.FromSeconds(remainingSeconds))));
+                return;
+            }
+            
 
             var timeout = 5500f; // Timeout (in milliseconds)
             Chat(player, _lang("ClaimPleaseWait", player.UserIDString));
@@ -576,7 +601,8 @@ namespace Oxide.Plugins
                     { PluginSettings.RewardIsCumulative, "false" },
                     { PluginSettings.LogEnabled, "true" },
                     { PluginSettings.GlobalChatAnnouncments, "true" },
-                    { PluginSettings.LocalChatAnnouncments, "true" }
+                    { PluginSettings.LocalChatAnnouncments, "true" },
+                    { PluginSettings.RewardClaimWipeCooldown, "0" },
                 },
                 Discord = new Dictionary<string, string>
                 {
@@ -663,6 +689,7 @@ namespace Oxide.Plugins
             public const string RewardIsCumulative = "Vote rewards cumulative (true / false)";
             public const string GlobalChatAnnouncments = "Globally announcment in chat when player voted (true / false)";
             public const string LocalChatAnnouncments = "Send thank you message to player who voted (true / false)";
+            public const string RewardClaimWipeCooldown = "Reward claim cooldown after wipe (in seconds)";
         }
         class PluginConfig
         {
@@ -951,6 +978,47 @@ namespace Oxide.Plugins
                     availableAPISites.Add(kvp.Key);
                 }
             }
+        }
+
+        private bool IsOnWipeCooldown(int seconds, out int remaining) {
+            double currentTime = CurrentTime;
+            double nextUseTime = LastWipeTime + seconds;
+
+            if (currentTime < nextUseTime) {
+                remaining = Mathf.RoundToInt((float)nextUseTime - (float)currentTime);
+                return true;
+            }
+
+            remaining = 0;
+            return false;
+        }
+
+        private string FormatTimeSpanVerbose(TimeSpan ts) {
+            var parts = new List<string>();
+
+            var units = new (int value, string name)[]
+            {
+                (ts.Days, "day"),
+                (ts.Hours, "hour"),
+                (ts.Minutes, "minute"),
+                (ts.Seconds, "second")
+            };
+
+            bool foundFirstNonZero = false;
+
+            foreach (var (value, name) in units) {
+                if (!foundFirstNonZero && value == 0)
+                    continue;
+
+                foundFirstNonZero = true;
+                parts.Add($"{value} {name}" + (value == 1 ? "" : "s"));
+            }
+
+            // If all are zero, just show "0 seconds"
+            if (parts.Count == 0)
+                parts.Add("0 seconds");
+
+            return string.Join(", ", parts);
         }
         #endregion
 
