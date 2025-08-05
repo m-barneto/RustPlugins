@@ -1,15 +1,12 @@
 ﻿#pragma warning disable IDE0051 // Remove unused private members
 
-using Facepunch;
 using Newtonsoft.Json;
 using Oxide.Core;
-using Oxide.Core.Libraries.Covalence;
-using System.Collections;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using static Construction;
-using static Oxide.Plugins.BuildTools;
+using static BuildingBlock;
 
 namespace Oxide.Plugins {
     [Info("BuildTools", "Mattdokn", "1.0.0")]
@@ -17,12 +14,17 @@ namespace Oxide.Plugins {
     public class BuildTools : RustPlugin {
         public const string USE_CREATIVE_CUPBOARD = "buildtools.creativecupboard";
         public const string USE_REMOVE_HAMMER = "buildtools.hammerremove";
-
         public const string USE_BGRADE = "buildtools.bgrade";
+        public const string BUILD_FOR_FREE = "buildtools.buildforfree";
+
 
         public Dictionary<ulong, PlayerSelectionData> playerSelections = new Dictionary<ulong, PlayerSelectionData>();
 
         DataFileSystem playerDataFileSystem;
+
+        // Wipe cooldown time data
+        private static DateTime Epoch = new DateTime(1970, 1, 1, 0, 0, 0);
+        private static double CurrentTime => DateTime.UtcNow.Subtract(Epoch).TotalSeconds;
 
         #region Hooks
         void Loaded() {
@@ -33,6 +35,7 @@ namespace Oxide.Plugins {
             permission.RegisterPermission(USE_REMOVE_HAMMER, this);
 
             permission.RegisterPermission(USE_BGRADE, this);
+            permission.RegisterPermission(BUILD_FOR_FREE, this);
 
             // Setup our data file system
             playerDataFileSystem = new DataFileSystem($"{Interface.Oxide.DataDirectory}\\{Name}");
@@ -239,6 +242,13 @@ namespace Oxide.Plugins {
             bb.SendNetworkUpdate();
             bb.UpdateSkin();
             bb.ResetUpkeepTime();
+
+            bb.CancelInvoke(bb.StopBeingRotatable);
+            bb.CancelInvoke(bb.StopBeingDemolishable);
+
+            bb.SetFlag(BlockFlags.CanRotate, true);
+            bb.SetFlag(StabilityEntity.DemolishFlag, true);
+
             bb.GetBuilding()?.Dirty();
         }
 
@@ -256,6 +266,9 @@ namespace Oxide.Plugins {
             }
         }
 
+        #endregion
+
+        #region Commands
         #endregion
 
         #region BGradeSkins
@@ -301,6 +314,9 @@ namespace Oxide.Plugins {
             uint selectedColor = 1;
             [JsonProperty]
             Dictionary<BuildingGrade.Enum, BuildingSkin> selectedSkins;
+
+            [JsonProperty]
+            public double lastUpdatedTime = CurrentTime;
 
             public bool changed = false;
 
@@ -364,6 +380,7 @@ namespace Oxide.Plugins {
             }
         }
         #endregion
+
         #region Data
         void SavePlayerData(BasePlayer player) {
             // Make sure the player data is different from the default
@@ -371,6 +388,9 @@ namespace Oxide.Plugins {
             if (!playerSelections.TryGetValue(player.userID, out playerData)) return;
 
             if (!playerData.changed) return;
+
+            playerData.lastUpdatedTime = CurrentTime;
+
             // Save data to our filesystem
             playerDataFileSystem.WriteObject($"{player.UserIDString}", playerData);
         }

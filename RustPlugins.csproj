@@ -75,6 +75,9 @@
     <Reference Include="Oxide.Unity">
       <HintPath>References\Oxide\Oxide.Unity.dll</HintPath>
     </Reference>
+    <Reference Include="Rust.Data">
+      <HintPath>References\Rust\Rust.Data.dll</HintPath>
+    </Reference>
     <Reference Include="Rust.Localization">
       <HintPath>References\Rust\Rust.Localization.dll</HintPath>
     </Reference>
