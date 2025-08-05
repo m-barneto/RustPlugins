@@ -244,8 +244,15 @@ namespace Oxide.Plugins {
 
         void SaveData() {
             // Go through active players and save player data
+            BasePlayer player;
             for (int i = 0; i < BasePlayer.activePlayerList.Count; i++) {
-                OnPlayerDisconnected(BasePlayer.activePlayerList[i], "");
+                player = BasePlayer.activePlayerList[i];
+                if (!playerSelections.ContainsKey(player.userID)) {
+                    Puts($"Error! Player {player.UserIDString} : {player.displayName} does not exist within playerSelections loaded data!");
+                    return;
+                }
+
+                SavePlayerData(player);
             }
         }
 
@@ -291,9 +298,9 @@ namespace Oxide.Plugins {
             [JsonProperty]
             BuildingGrade.Enum selectedGrade = BuildingGrade.Enum.Twigs;
             [JsonProperty]
-            Dictionary<BuildingGrade.Enum, BuildingSkin> selectedSkins;
-            [JsonProperty]
             uint selectedColor = 1;
+            [JsonProperty]
+            Dictionary<BuildingGrade.Enum, BuildingSkin> selectedSkins;
 
             public bool changed = false;
 
@@ -316,12 +323,12 @@ namespace Oxide.Plugins {
             }
             public void IncrementGrade() {
                 int g = (int)selectedGrade + 1;
-                if (g >= (int)BuildingGrade.Enum.Count) g = 0;
+                if (g >= (int)BuildingGrade.Enum.Count) g = (int)BuildingGrade.Enum.TopTier;
                 SetGrade(g);
             }
             public void DecrementGrade() {
                 int g = (int)selectedGrade - 1;
-                if (g <= 0) g = (int)BuildingGrade.Enum.TopTier;
+                if (g <= 0) g = (int)BuildingGrade.Enum.Twigs;
                 SetGrade(g);
             }
             public BuildingGrade.Enum GetGrade() {
@@ -374,7 +381,6 @@ namespace Oxide.Plugins {
             }
             // Otherwise, return the loaded file
             PlayerSelectionData data = playerDataFileSystem.ReadObject<PlayerSelectionData>($"{player.UserIDString}");
-            Puts($"Loaded file for player {player.displayName} and changed was {data.changed}");
             return data;
         }
         #endregion
