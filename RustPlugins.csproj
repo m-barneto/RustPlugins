@@ -32,6 +32,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="BuildTools.cs" />
+    <Compile Include="EasyVote.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -73,6 +74,9 @@
     </Reference>
     <Reference Include="Oxide.Unity">
       <HintPath>References\Oxide\Oxide.Unity.dll</HintPath>
+    </Reference>
+    <Reference Include="Rust.Data">
+      <HintPath>References\Rust\Rust.Data.dll</HintPath>
     </Reference>
     <Reference Include="Rust.Localization">
       <HintPath>References\Rust\Rust.Localization.dll</HintPath>
