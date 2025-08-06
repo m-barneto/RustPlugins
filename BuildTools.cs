@@ -1,13 +1,16 @@
 ﻿#pragma warning disable IDE0051 // Remove unused private members
 
+using Facepunch;
 using Newtonsoft.Json;
 using Oxide.Core;
+using Oxide.Core.Libraries.Covalence;
 using ProtoBuf;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security;
 using UnityEngine;
+using VLB;
 using static BuildingBlock;
 using static BuildingGrade;
 
@@ -19,6 +22,8 @@ namespace Oxide.Plugins {
         public const string USE_REMOVE_HAMMER = "buildtools.hammerremove";
         public const string USE_BGRADE = "buildtools.bgrade";
         public const string BUILD_FOR_FREE = "buildtools.buildforfree";
+        static bool initialised = false;
+        public static BuildTools Instance;
 
 
         public Dictionary<ulong, PlayerSelectionData> playerSelections = new Dictionary<ulong, PlayerSelectionData>();
@@ -30,6 +35,16 @@ namespace Oxide.Plugins {
         private static double CurrentTime => DateTime.UtcNow.Subtract(Epoch).TotalSeconds;
 
         #region Hooks
+        void Init() {
+            Instance = this;
+            Unsubscribe(nameof(OnEntitySpawned));
+        }
+
+        void OnServerInitialized(bool initial) {
+            initialised = true;
+            Subscribe(nameof(OnEntitySpawned));
+        }
+
         void Loaded() {
             Puts("Disabling upkeep!");
             RunSilentCommand("decay.upkeep", "false");
@@ -49,67 +64,32 @@ namespace Oxide.Plugins {
             }
         }
 
+
         // Save player data for all connected players
         void Unload() => SaveData();
         void OnServerSave() => SaveData();
 
-        // Change out for component that gets input
-        void OnPlayerInput(BasePlayer player, InputState input) {
-            var helditemName = player.GetActiveItem()?.info?.shortname;
-            if (helditemName == null) return;
+        // Handles our conditions for watching player input
+        void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem) {
+            if (player == null || player.IsNpc || newItem == null) return;
 
-            // If it's a hammer
-            if (IsHoldingHammer(player)) {
-                // If we hit r
-                if (input.WasJustPressed(BUTTON.RELOAD)) {
-                    // Have perm
-                    if (!permission.UserHasPermission(player.UserIDString, USE_REMOVE_HAMMER)) return;
-
-                    // Send out raycast and kill entity
-                    RaycastHit hit;
-                    if (!Physics.Raycast(player.eyes.HeadRay(), out hit, 25f)) return;
-
-                    DecayEntity hitEnt = hit.GetEntity() as DecayEntity;
-
-                    if (hitEnt == null) return;
-                    if (hitEnt.OwnerID != player.userID) return;
-
-                    hitEnt.Kill();
-                }
-                if (input.IsDown(BUTTON.FIRE_SECONDARY)) {
-                    // Have perm
-                    if (!permission.UserHasPermission(player.UserIDString, USE_BGRADE)) return;
-
-                    PlayerSelectionData data;
-                    if (!playerSelections.TryGetValue(player.userID, out data)) return;
-
-                    // Send out raycast and kill entity
-                    RaycastHit hit;
-                    if (!Physics.Raycast(player.eyes.HeadRay(), out hit, 25f)) return;
-                    if (hit.distance <= 2f + float.Epsilon) return;
-
-                    BuildingBlock bb = hit.GetEntity() as BuildingBlock;
-
-                    if (bb == null) return;
-                    if (bb.OwnerID != player.userID) return;
-
-                    UpdateBuildingBlock(bb, data.GetGrade(), data.GetCurrentSkin().skin, data.GetCurrentColor());
-                }
+            if (newItem.info.shortname.Equals("hammer") || newItem.info.shortname.Equals("toolgun") || newItem.info.shortname.Equals("building.planner")) {
+                player.GetOrAddComponent<PlayerInputMonitor>();
             }
         }
 
-        //OnServerCommand inventory.lighttoggle
-        // TODO can we switch to this void since we never want to return non-null
-        object OnServerCommand(ConsoleSystem.Arg arg) {
-            if (arg.Connection == null) return null;
+        // inventory.lighttoggle & client.selectedshippingcontainerblockcolour
+        // Handle when user presses F to change bgrade level as well as updating selected shipping container color
+        void OnServerCommand(ConsoleSystem.Arg arg) {
+            if (arg.Connection == null) return;
 
 
             var player = arg.Player();
-            if (player == null) return null;
+            if (player == null) return;
 
             PlayerSelectionData playerSelectionData = null;
             if (!playerSelections.TryGetValue(player.userID, out playerSelectionData)) {
-                return null;
+                return;
             }
 
 
@@ -128,14 +108,13 @@ namespace Oxide.Plugins {
                 playerSelectionData.SetColor((uint)arg.GetInt(1, 1));
             }
 
-            return null;
+            return;
         }
 
         // Detect when TC has been placed
         void OnEntitySpawned(BuildingPrivlidge cupboard) {
-            var player = BasePlayer.FindByID(cupboard.OwnerID);
+            BasePlayer player = BasePlayer.FindByID(cupboard.OwnerID);
             if (!player) {
-                Puts("No player found for this cupboard?");
                 return;
             }
             if (!permission.UserHasPermission(player.UserIDString, USE_CREATIVE_CUPBOARD)) return;
@@ -177,7 +156,7 @@ namespace Oxide.Plugins {
 
 
         // When player places structure handle auto bgrade and skin
-        private void OnEntityBuilt(Planner plan, GameObject gameObject) {
+        void OnEntityBuilt(Planner plan, GameObject gameObject) {
             var player = plan?.GetOwnerPlayer();
 
             if (player == null) return;
@@ -203,7 +182,7 @@ namespace Oxide.Plugins {
             UpdateBuildingBlock(buildingBlock, grade, playerData.GetCurrentSkin().skin, playerData.GetCurrentColor());
         }
 
-        // Upgrade for free, select skin here
+        // Upgrade building blocks for free, update selected skin here
         object OnPayForUpgrade(BasePlayer player, BuildingBlock block, ConstructionGrade gradeTarget) {
             PlayerSelectionData playerData;
             if (!playerSelections.TryGetValue(player.userID, out playerData)) return false;
@@ -213,13 +192,13 @@ namespace Oxide.Plugins {
             return false;
         }
 
-        // Place for free
+        // Place deployables for free
         object OnPayForPlacement(BasePlayer player, Planner planner, Construction construction) {
             return false;
         }
 
         // Teleport to map marker hook
-        private object OnMapMarkerAdd(BasePlayer player, MapNote note) {
+        object OnMapMarkerAdd(BasePlayer player, MapNote note) {
             if (player == null || note == null || player.GetActiveItem() == null) return null;
 
             if (player.GetActiveItem().info.shortname.Equals("map")) {
@@ -247,7 +226,7 @@ namespace Oxide.Plugins {
         #endregion
 
         #region Methods
-        private static ConsoleSystem.Arg RunSilentCommand(string strCommand, params object[] args) {
+        static ConsoleSystem.Arg RunSilentCommand(string strCommand, params object[] args) {
             var command = ConsoleSystem.BuildCommand(strCommand, args);
             var arg = new ConsoleSystem.Arg(ConsoleSystem.Option.Unrestricted, command);
             if (arg.Invalid || !arg.cmd.Variable) return null;
@@ -299,10 +278,46 @@ namespace Oxide.Plugins {
                 SavePlayerData(player);
             }
         }
-
         #endregion
 
         #region Commands
+        [Command("calc")]
+        private void CalculateCost(BasePlayer player, string command, string[] args) {
+            if (player.GetBuildingPrivilege() == null) {
+                player.ChatMessage("Could not find a nearby tool cupboard!");
+                return;
+            }
+            BuildingPrivlidge privilege = player.GetBuildingPrivilege();
+            BuildingManager.Building building = privilege.GetBuilding();
+            
+            if (building == null) {
+                player.ChatMessage("No building attached to tool cupboard.");
+                return;
+            }
+            // Draw our sphere at the center
+            //building.GetDominatingBuildingPrivilege().bounds.center
+            SphereEntity sphereEntity = GameManager.server.CreateEntity("assets/bundled/prefabs/modding/events/twitch/br_sphere.prefab", privilege.ServerPosition) as SphereEntity;
+            sphereEntity.lerpSpeed = 5f;
+            sphereEntity.lerpRadius = 50f;
+            sphereEntity.currentRadius = 50f;
+            sphereEntity.enabled = true;
+            sphereEntity.Spawn();
+            // we have center, get all entities within 50m
+            List<BuildingBlock> entities = Pool.Get<List<BuildingBlock>>();
+            BaseEntity.Query.Server.GetInSphere(privilege.ServerPosition, 50f, (entities) => {
+                foreach (var entity in entities) {
+                    if (entity is BuildingBlock block) {
+                        // If the block is part of the building
+                        if (building.buildingBlocks.Contains(block)) {
+                            // Get the cost of the block
+                            var cost = block.GetConstructionCost();
+                            player.ChatMessage($"Block {block.name} costs: {cost.wood} wood, {cost.stone} stone, {cost.metalFragments} metal fragments, {cost.metalRefined} metal refined.");
+                        }
+                    }
+                }
+            });
+            player.ChatMessage($"Found {building.buildingPrivileges.Count} tool cupboards.");
+        }
         #endregion
 
         #region BGradeSkins
@@ -437,6 +452,68 @@ namespace Oxide.Plugins {
             PlayerSelectionData data = playerDataFileSystem.ReadObject<PlayerSelectionData>($"{player.UserIDString}");
             return data;
         }
+        #endregion
+
+        #region InputComponent
+        class PlayerInputMonitor : MonoBehaviour {
+            private BasePlayer player;
+            void Start() {
+                player = GetComponent<BasePlayer>();
+            }
+            void Update() {
+                if (player == null || !player.IsConnected || player.GetActiveItem() == null) {
+                    Destroy(this);
+                    return;
+                }
+                string activeItemName = player.GetActiveItem().info.shortname;
+                if (activeItemName != "hammer" && activeItemName != "toolgun" && activeItemName != "building.planner") {
+                    Destroy(this);
+                    return;
+                }
+
+
+                if (player.serverInput.WasJustPressed(BUTTON.RELOAD)) {
+                    if (Instance.IsHoldingHammer(player)) {
+                        // Have perm
+                        if (!Instance.permission.UserHasPermission(player.UserIDString, USE_REMOVE_HAMMER)) return;
+
+                        // Send out raycast and kill entity
+                        RaycastHit hit;
+                        if (!Physics.Raycast(player.eyes.HeadRay(), out hit, 25f)) return;
+
+                        DecayEntity hitEnt = hit.GetEntity() as DecayEntity;
+
+                        if (hitEnt == null) return;
+                        if (hitEnt.OwnerID != player.userID) return;
+
+                        hitEnt.Kill();
+                    }
+                }
+                if (player.serverInput.IsDown(BUTTON.FIRE_SECONDARY)) {
+                    // Have perm
+                    if (!Instance.permission.UserHasPermission(player.UserIDString, USE_BGRADE)) return;
+
+                    PlayerSelectionData data;
+                    if (!Instance.playerSelections.TryGetValue(player.userID, out data)) return;
+
+                    // Send out raycast and kill entity
+                    RaycastHit hit;
+                    if (!Physics.Raycast(player.eyes.HeadRay(), out hit, 25f)) return;
+                    if (hit.distance <= 2f + float.Epsilon) return;
+
+                    BuildingBlock bb = hit.GetEntity() as BuildingBlock;
+
+                    if (bb == null) return;
+                    if (bb.OwnerID != player.userID) return;
+
+                    Instance.UpdateBuildingBlock(bb, data.GetGrade(), data.GetCurrentSkin().skin, data.GetCurrentColor());
+                }
+            }
+        }
+        #endregion
+
+        #region CalculationSphere
+
         #endregion
     }
 }

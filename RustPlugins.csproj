@@ -78,6 +78,9 @@
     <Reference Include="Rust.Data">
       <HintPath>References\Rust\Rust.Data.dll</HintPath>
     </Reference>
+    <Reference Include="Rust.Global">
+      <HintPath>References\Rust\Rust.Global.dll</HintPath>
+    </Reference>
     <Reference Include="Rust.Localization">
       <HintPath>References\Rust\Rust.Localization.dll</HintPath>
     </Reference>
