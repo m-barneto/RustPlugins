@@ -2,11 +2,14 @@
 
 using Newtonsoft.Json;
 using Oxide.Core;
+using ProtoBuf;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security;
 using UnityEngine;
 using static BuildingBlock;
+using static BuildingGrade;
 
 namespace Oxide.Plugins {
     [Info("BuildTools", "Mattdokn", "1.0.0")]
@@ -50,6 +53,7 @@ namespace Oxide.Plugins {
         void Unload() => SaveData();
         void OnServerSave() => SaveData();
 
+        // Change out for component that gets input
         void OnPlayerInput(BasePlayer player, InputState input) {
             var helditemName = player.GetActiveItem()?.info?.shortname;
             if (helditemName == null) return;
@@ -130,6 +134,10 @@ namespace Oxide.Plugins {
         // Detect when TC has been placed
         void OnEntitySpawned(BuildingPrivlidge cupboard) {
             var player = BasePlayer.FindByID(cupboard.OwnerID);
+            if (!player) {
+                Puts("No player found for this cupboard?");
+                return;
+            }
             if (!permission.UserHasPermission(player.UserIDString, USE_CREATIVE_CUPBOARD)) return;
             // Authed user placed cupboard set it up
             cupboard.inventory.Clear();
@@ -210,6 +218,32 @@ namespace Oxide.Plugins {
             return false;
         }
 
+        // Teleport to map marker hook
+        private object OnMapMarkerAdd(BasePlayer player, MapNote note) {
+            if (player == null || note == null || player.GetActiveItem() == null) return null;
+
+            if (player.GetActiveItem().info.shortname.Equals("map")) {
+                var pos = note.worldPosition;
+                pos.y = TerrainMeta.HeightMap.GetHeight(pos);
+                RaycastHit hitInfo;
+
+                if (Physics.Raycast(
+                    new Vector3(pos.x, pos.y + 200f, pos.z),
+                    Vector3.down,
+                    out hitInfo,
+                    float.MaxValue,
+                    LayerMask.GetMask("Water", "Solid"))) {
+
+                    pos.y = Mathf.Max(hitInfo.point.y, pos.y);
+                }
+
+                player.Teleport(pos);
+                player.RemoveFromTriggers();
+                player.ForceUpdateTriggers();
+                return false;
+            }
+            return null;
+        }
         #endregion
 
         #region Methods
