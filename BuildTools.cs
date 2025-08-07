@@ -414,6 +414,8 @@ namespace Oxide.Plugins {
         #region InputComponent
         class PlayerInputMonitor : MonoBehaviour {
             private BasePlayer player;
+            private float nextFireTime = 0f;
+            private const float REMOVE_COOLDOWN = 0.5f;
             void Start() {
                 player = GetComponent<BasePlayer>();
             }
@@ -431,6 +433,7 @@ namespace Oxide.Plugins {
 
                 if (player.serverInput.WasJustPressed(BUTTON.RELOAD)) {
                     if (Instance.IsHoldingHammer(player)) {
+                        if (Time.time < nextFireTime) return;
                         // Have perm
                         if (!Instance.permission.UserHasPermission(player.UserIDString, USE_REMOVE_HAMMER)) return;
 
@@ -444,6 +447,7 @@ namespace Oxide.Plugins {
                         if (hitEnt.OwnerID != player.userID) return;
 
                         hitEnt.Kill();
+                        nextFireTime = Time.time + REMOVE_COOLDOWN;
                     }
                 }
                 if (player.serverInput.IsDown(BUTTON.FIRE_SECONDARY)) {
