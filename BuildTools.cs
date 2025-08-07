@@ -13,6 +13,7 @@ using UnityEngine;
 using VLB;
 using static BuildingBlock;
 using static BuildingGrade;
+using static Facepunch.Pool;
 
 namespace Oxide.Plugins {
     [Info("BuildTools", "Mattdokn", "1.0.0")]
@@ -296,27 +297,24 @@ namespace Oxide.Plugins {
             }
             // Draw our sphere at the center
             //building.GetDominatingBuildingPrivilege().bounds.center
-            SphereEntity sphereEntity = GameManager.server.CreateEntity("assets/bundled/prefabs/modding/events/twitch/br_sphere.prefab", privilege.ServerPosition) as SphereEntity;
-            sphereEntity.lerpSpeed = 5f;
-            sphereEntity.lerpRadius = 50f;
-            sphereEntity.currentRadius = 50f;
-            sphereEntity.enabled = true;
-            sphereEntity.Spawn();
+            //SphereEntity sphereEntity = GameManager.server.CreateEntity("assets/bundled/prefabs/modding/events/twitch/br_sphere.prefab", privilege.ServerPosition) as SphereEntity;
+            //sphereEntity.lerpSpeed = 5f;
+            //sphereEntity.lerpRadius = 50f;
+            //sphereEntity.currentRadius = 50f;
+            //sphereEntity.enabled = true;
+            //sphereEntity.Spawn();
             // we have center, get all entities within 50m
-            List<BuildingBlock> entities = Pool.Get<List<BuildingBlock>>();
-            BaseEntity.Query.Server.GetInSphere(privilege.ServerPosition, 50f, (entities) => {
-                foreach (var entity in entities) {
-                    if (entity is BuildingBlock block) {
-                        // If the block is part of the building
-                        if (building.buildingBlocks.Contains(block)) {
-                            // Get the cost of the block
-                            var cost = block.GetConstructionCost();
-                            player.ChatMessage($"Block {block.name} costs: {cost.wood} wood, {cost.stone} stone, {cost.metalFragments} metal fragments, {cost.metalRefined} metal refined.");
-                        }
-                    }
-                }
-            });
-            player.ChatMessage($"Found {building.buildingPrivileges.Count} tool cupboards.");
+            PooledList<BuildingBlock> entities = Pool.Get<PooledList<BuildingBlock>>();
+            BaseEntity.Query.Server.GetInSphere(privilege.ServerPosition, 50f, entities);
+            // Go through each and find building ids that arent our main tc
+            uint mainTc = privilege.buildingID;
+            HashSet<uint> externalTcs = new HashSet<uint>();
+            int entityCount = entities.Count;
+            for (int i = 0; i < entityCount; i++) {
+                if (entities[i].buildingID != mainTc) externalTcs.Add(entities[i].buildingID);
+            }
+            player.ChatMessage($"Found {building.buildingPrivileges.Count} tool cupboards. Blocks: {entities.Count}");
+            Pool.Free(ref entities);
         }
         #endregion
 
