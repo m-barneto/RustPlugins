@@ -31,6 +31,7 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="BuildCost.cs" />
     <Compile Include="BuildTools.cs" />
     <Compile Include="EasyVote.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
